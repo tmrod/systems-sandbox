@@ -1,0 +1,9 @@
+1. Transfer function is:  TransferFunction(b, -a + b*k + s, s)
+2. Poles:  [a - b*k]
+2. Zeros:  []
+RoC:  re{s} > re(a) - re(b*k)
+2a. Is {a=1, b=1, k=3} stable?  True
+2b. Is {a=1, b=1, k=-2} stable?  False
+3. {a=1, b=1, k=2} is stable.
+4. Is {a=b*k} stable?  False
+4. Is {a=b*k-1} stable?  True

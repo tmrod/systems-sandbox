@@ -1,0 +1,40 @@
+(import systems_sandbox *)
+(require systems_sandbox *)
+
+(declare S1 feedback (rational b [] [a]) (gain k))
+
+(print "1. Transfer function is: "
+       (transfer-function S1))
+
+(print "2. Poles: "
+       (poles S1))
+(print "2. Zeros: "
+       (zeros S1))
+
+(print "RoC: "
+       (region-of-convergence S1))
+
+;; stable case
+;; a = 1 b = 1 k = 3
+(print "2a. Is {a=1, b=1, k=3} stable? "
+       (stable S1 {a 1 b 1 k 3}))
+(pole-zero-plot S1 {a 1 b 1 k 3})
+
+;; unstable case
+;; a = 1 b = 1 k = -2
+(print "2b. Is {a=1, b=1, k=-2} stable? "
+       (stable S1 {a 1 b 1 k -2}))
+(pole-zero-plot S1 {a 1 b 1 k -2})
+
+;; a = 1 b = 1 k = 2
+(if (stable S1 {a 1 b 1 k 2})
+  (do (print "3. {a=1, b=1, k=2} is stable.")
+      (impulse-plot S1 {a 1 b 1 k 2}))
+  (do (print "3. {a=1, b=1, k=2} is not stable.")
+      (step-plot S1 {a 1 b 1 k 2})))
+
+;; equality condition: a = bk
+(print "4. Is {a=b*k} stable? "
+       (stable S1 {a (* b k)}))
+(print "4. Is {a=b*k-1} stable? "
+       (stable S1 {a (- (* b k) 1)}))
