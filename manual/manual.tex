@@ -114,11 +114,11 @@
 
   Which symbol is the most important?
   &
-  All symbols are equal, but some are more equal than others. \lstinline!s! is the most equal symbol. \\
+  All symbols are equal, but some are more equal than others. \lstinline!s! is the most equal symbol. \lstinline!z! is also special. \\
 
   Why is \lstinline!s! a special symbol?
   &
-  Because we use it to represent the argument for the Laplace transform. \\
+  Because we use it to represent the argument for the Laplace transform. Similarly, \lstinline!z! is used for the $z$-transform. \\
 
   Are there any other special symbols?
   &
@@ -621,10 +621,115 @@
   \lstinline!re(b) + 1 < 0! \\
 
   \midrule
+  \midrule
+
+  What symbol do we use for the Laplace transform?
+  &
+  \lstinline!s! \\
+
+  What kind of LTI system do we use the Laplace transform to analyze?
+  &
+  Continuous-time LTI systems. \\
+
+  What kind of LTI system do we use the $z$-transform to analyze?
+  &
+  Discrete-time LTI systems. \\
+
+  What symbol do we use for the $z$-transform?
+  &
+  \lstinline!z! \\
+
+  What is \lstinline!(declare S rational 1 [] [-3 -2])!?
+  &
+  A causal LTI system with a rational transfer function, having gain $1$, no zeros, and poles at $-3$ and $-2$. \\
+
+  \lstinline!(?is S stable)!
+  &
+  \lstinline!True! \\
+
+  \lstinline!(?is S stable :sym z)!
+  &
+  \lstinline!False! \\
+
+  What is the difference between the two?
+  &
+  The query \lstinline!(?is S stable)! asked if \lstinline!S! is stable when treating it as a continuous-time system (by default).
+  The query \lstinline!(?is S stable :sym z)! asked if \lstinline!S! is stable when treating it as a discrete-time system. \\
+
+  Why does the addition of \lstinline!:sym z! tell us that the system should be thought of in discrete-time?
+  &
+  Because \lstinline!z! is the symbol used for the $z$-transform, and the $z$-transform is for discrete-time systems. \\
+
+  \midrule
+
+  \multicolumn{2}{c}{\Large Add \lstinline!:sym z! to consider systems in discrete-time} \\
+
+  \midrule
+
+  What is \lstinline!(declare D delay)!?
+  &
+  A discrete-time unit delay. \\
+
+  What are the poles of a discrete-time unit delay?
+  &
+  There is a single pole at zero. \\
+
+  What is \lstinline!(poles D)!?
+  &
+  \lstinline![]! \\
+
+  What is \lstinline!(poles D :sym z)!?
+  &
+  \lstinline![0]! \\
+
+  What is \lstinline!(declare A accumulate)!?
+  &
+  A discrete-time accumulator (integrator). \\
+
+  What are the zeros of such a system?
+  &
+  There is a single zero at zero. \\
+
+  What is \lstinline!(zeros A)!?
+  &
+  \lstinline![]! \\
+
+  What is \lstinline!(zeros A :sym z)!?
+  &
+  \lstinline![0]! \\
+
+  What is \lstinline!(declare S rational-polynomial "z-1" "(z**2+a)*(z+4)")!?
+  &
+  A system whose transfer function is given by $\dfrac{z-1}{(z^2+a)(z+4)}$. \\
+
+  What is \lstinline!(poles S :sym z)!?
+  &
+  \lstinline![-4 sqrt(-a) -sqrt(-a)]! \\
+
+  What is \lstinline!(poles S :bind {a -1} :sym z)!?
+  &
+  \lstinline![-4 -1]! \\
+
+  What is the pole-zero plot of this system when $a=-1$?
+  &
+  \lstinline!(pole-zero-plot S :bind {a -1} :sym z)! yields
+  \includegraphics[width=\linewidth]{figs/pz-discrete} \\
+
+  What is \lstinline!(region-of-convergence S :sym z)!?
+  &
+  \lstinline!Abs(z)>Max(4, Abs(sqrt(-a)))! \\
+
+  Are the DT system analysis features documented in \cref{sec:reference}?
+  &
+  Not yet! \\
+
+  \midrule
 
   \bottomrule
 
 \end{longtable}
+
+\newpage
 
 \subsection{Exercise}\label{sec:tutorial:exercise}
 
@@ -708,7 +813,7 @@ See below for an example session.
 You can type \lstinline!help! at the \lstinline!LTIza {} =>! prompt to get more information about available functionality.
 Be encouraged by this tool: use the code output to learn how to write your own programs in more formal language!
 
-\section{Reference}
+\section{Reference}\label{sec:reference}
 
 \subsection{Language Core}
 

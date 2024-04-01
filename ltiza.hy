@@ -14,10 +14,11 @@
   ;; bindings
   ;; system definitions
   ;; keyword list
-  (defn __init__ [self S [sysname "S"] [bind {}]]
+  (defn __init__ [self S [sysname "S"] [bind {}] [sym s]]
     (. (super) (__init__))
     (setv self.sysname sysname)
     (setv self.S S)
+    (setv self.sym sym)
     (setv self.bind bind)
     (setv self.prompt (+ self.pfx-prompt (repr self.bind) self.sfx-prompt)))
 
@@ -101,8 +102,8 @@
     LTIza {} => transfer function
     LTIza {} => what is the transfer function
     LTIza {a:1, b:2} => transfer"
-    (print f"(transfer-function {self.sysname} {(hy.repr self.bind)})")
-    (print (. (transfer-function self.S self.bind) (to-expr))))
+    (print f"(transfer-function {self.sysname} {(hy.repr self.bind)} {(hy.repr self.sym)})")
+    (print (. (transfer-function self.S self.bind self.sym) (to-expr))))
 
   ;; show poles
   (defn do-poles [self line]
@@ -112,8 +113,8 @@
     --------
     LTIza {a:1, b:2, c:3} => poles
     LTIza {a:1, b:2} => pole"
-    (print f"(poles {self.sysname} {(hy.repr self.bind)})")
-    (print (poles self.S self.bind)))
+    (print f"(poles {self.sysname} {(hy.repr self.bind)} {(hy.repr self.sym)})")
+    (print (poles self.S self.bind self.sym)))
 
   ;; show zeros
   (defn do-zeros [self line]
@@ -123,8 +124,8 @@
     --------
     LTIza {a:1, b:2, c:3} => zeros
     LTIza {a:1, b:2} => zero"
-    (print f"(zeros {self.sysname} {(hy.repr self.bind)})")
-    (print (zeros self.S self.bind)))
+    (print f"(zeros {self.sysname} {(hy.repr self.bind)} {(hy.repr self.sym)})")
+    (print (zeros self.S self.bind self.sym)))
 
   ;; plotting
   (defn do-plot [self line]
@@ -133,6 +134,7 @@
     - Impulse response
     - Step response
     - Ramp response
+    - Fourier transform
 
     Examples
     --------
@@ -143,23 +145,28 @@
     (cond
      (or (in "pole" line) (in "zero" line))
      (do
-	 (print f"(pole-zero-plot {self.sysname} {(hy.repr self.bind)})")
-	 (pole-zero-plot self.S self.bind))
+	 (print f"(pole-zero-plot {self.sysname} {(hy.repr self.bind)} {(hy.repr self.sym)})")
+	 (pole-zero-plot self.S self.bind self.sym))
 
      (in "step" line)
      (do
-	 (print f"(step-plot {self.sysname} {(hy.repr self.bind)})")
-	 (step-plot self.S self.bind))
+	 (print f"(step-plot {self.sysname} {(hy.repr self.bind)} {(hy.repr self.sym)})")
+	 (step-plot self.S self.bind self.sym))
 
      (in "ramp" line)
      (do
-	 (print f"(ramp-plot {self.sysname} {(hy.repr self.bind)})")
-	 (ramp-plot self.S self.bind))
+	 (print f"(ramp-plot {self.sysname} {(hy.repr self.bind)} {(hy.repr self.sym)})")
+	 (ramp-plot self.S self.bind self.sym))
 
      (or (in "impulse" line) (in "response" line))
      (do
-	 (print f"(impulse-plot {self.sysname} {(hy.repr self.bind)})")
-	 (impulse-plot self.S self.bind))
+	 (print f"(impulse-plot {self.sysname} {(hy.repr self.bind)} {(hy.repr self.sym)})")
+	 (impulse-plot self.S self.bind self.sym))
+
+     (or (in "frequency" line) (in "fourier" line))
+     (do
+	 (print f"(frequency-plot {self.sysname} {(hy.repr self.bind)} {(hy.repr self.sym)})")
+	 (frequency-plot self.S self.bind self.sym))
 
      True
      (print "Sorry, I do not understand what you want to plot. Try `help plot`")))
@@ -178,7 +185,7 @@
 
        ;; ways that one might want to plot
        ;; without using the word "plot"
-       (in (get wl 0) ["impulse" "step" "ramp" "response" "draw"])
+       (in (get wl 0) ["impulse" "step" "ramp" "response" "draw" "fourier"])
        (self.do-plot line)
 
        ;; transfer function, without the word "transfer"
@@ -196,13 +203,13 @@
        ;; ways that one might ask for the RoC, stability
        (in (get wl 0) ["region" "convergence"])
        (do
-	   (print f"(region-of-convergence {self.sysname} {(hy.repr self.bind)})")
+	   (print f"(region-of-convergence {self.sysname} {(hy.repr self.bind)} {(hy.repr self.sym)})")
 	   (print (region-of-convergence self.S self.bind)))
 
        (in (get wl 0) ["stable" "stability"])
        (do
-	   (print f"(stable {self.sysname} {(hy.repr self.bind)})")
-	   (print (stable self.S self.bind)))
+	   (print f"(stable {self.sysname} {(hy.repr self.bind)} {(hy.repr self.sym)})")
+	   (print (stable self.S self.bind self.sym)))
 
        ;; poles, zeros
        (in (get wl 0) ["pole"])
@@ -217,10 +224,8 @@
        (return (. (super) (default line)))
 
        True
-       (do
-	   (print (. " " (join (cut wl 1 None))))
-	   (self.onecmd (. " " (join (cut wl 1 None)))))))))
+       (self.onecmd (. " " (join (cut wl 1 None))))))))
 
 ;; TODO: figure out how to get the sysname automatically
-(defmacro ask-ltiza [S [sysname "S"] [bind {}]]
-  `(. (LTIza ~S ~sysname ~bind) (cmdloop)))
+(defn ask-ltiza [S [sysname "S"] [bind {}] [sym s]]
+  (. (LTIza S sysname bind sym) (cmdloop)))
