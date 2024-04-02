@@ -10,6 +10,8 @@
 (import operator [mul add])
 
 (import numpy :as np)
+(import scipy.signal [residuez])
+(import scipy.special [binom])
 (import matplotlib.pyplot :as plt)
 (import matplotlib.pyplot [axvline axhline])
 (import matplotlib [patches])
@@ -39,7 +41,7 @@
 
 ;; common DT systems
 (defn delay [[m 1]] (rational-polynomial "1" f"z**{m}"))
-(defn accumulate [] (rational-polynomial "z" "z-1"))
+(defn accumulate [] (rational-polynomial "z" "1-z"))
 
 ;; simple controllers
 (defn pd [[Kp 1] [Kd 0] [sym s]]
@@ -202,22 +204,21 @@
 	       zdata (get pzdata 0)
 	       pdata (get pzdata 1)
 	       ax (plt.subplot 1 1 1)
-	       unitcirc (patches.Circle #(0 0) 1 :fill False :color "black" :ls "solid" :alpha 0.1)]
+	       unitcirc (patches.Circle #(0 0) 1 :fill False :color "black" :ls "solid" :alpha 0.5)]
     (axvline 0 :color "0.7")
     (axhline 0 :color "0.7")
     (when (= sym z)
       (. ax (add-patch unitcirc)))
     (plt.plot (np.real pdata) (np.imag pdata)
-	      "x" :markersize 9 :alpha 0.5)
+	      "x" :markersize 9 :alpha 0.8)
     (plt.plot (np.real zdata) (np.imag zdata)
-	      "o" :markersize 9 :alpha 0.5 :color "none")
+	      "o" :markersize 9 :alpha 0.8 :color "none")
     (plt.show)))
 
 (defn frequency-plot [S [bind {}] [sigma0 0] [sym s] #** kwargs]
   (cond
    (= sym z)
-   ;; "DT frequency-plot not yet implemented"
-   (if (convergent-at sigma0 S bind sym)
+   (if (convergent-at (sympy.exp sigma0) S bind sym)
        (sympy.plot (sympy.Abs
 		    (. (transfer-function S bind sym)
 		       (to-expr)
@@ -232,6 +233,7 @@
 		    (. (transfer-function S bind sym)
 		       (to-expr)
 		       (subs {sym (+ sigma0 (* 1j omega))})))
+		   #(omega -10 10)
 		   :kwargs kwargs)
      (print "System not stable for given parameters."))))
 
@@ -262,5 +264,5 @@
 
    True
    (control-plots.ramp-response-plot
-    (transfer-function S bind)
+    (transfer-function S bind sym)
     :kwargs kwargs)))
