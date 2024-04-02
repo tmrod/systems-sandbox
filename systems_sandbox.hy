@@ -88,8 +88,8 @@
 
    ;; feedback system
    (= (get S 0) 'feedback)
-   (. (Feedback (transfer-function (get S 1) bind)
-		(transfer-function (get S 2) bind))
+   (. (Feedback (transfer-function (get S 1) bind sym)
+		(transfer-function (get S 2) bind sym))
       (doit))
 
    ;; composed systems

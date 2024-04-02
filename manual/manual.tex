@@ -803,14 +803,12 @@ See below for an example session.
   LTIza {b: 1} => what is the region of convergence
     (region-of-convergence S {b 1})
     re(s) > Max(-2, re(a))
-  LTIza {b: 1} => is the system stable
-    (stable S {b 1})
-    re(a) < 0
   LTIza {b: 1} => quit
   =>
 \end{lstlisting}
 
 You can type \lstinline!help! at the \lstinline!LTIza {} =>! prompt to get more information about available functionality.
+Also see \cref{sec:reference:ltiza} for further reference on calling the function \lstinline!ask-ltiza!.
 Be encouraged by this tool: use the code output to learn how to write your own programs in more formal language!
 
 \section{Reference}\label{sec:reference}
@@ -852,6 +850,24 @@ The core language features can be found in \lstinline!systems_sandbox.hy!.
   &
   Alias for \texttt{(rational 1 [] [0])}. \\
 
+  \texttt{(delay [[m 1]])}
+  &
+  Alias for \texttt{(rational-polynomial "1" f"z**{m}")}. \\
+
+  \texttt{(accumulate [])}
+  &
+  Alias for \texttt{(rational-polynomial "z" "z-1")}. \\
+
+  \texttt{(pd [[Kp 1] [Kd 0] [sym s]])}
+  &
+  Builds a proportional+derivative controller with proportional factor \lstinline!Kp! and derivative factor \lstinline!Kd!.
+  If \lstinline!sym = z!, then the derivative is replaced by a delay. \\
+
+  \texttt{(pid [[Kp 1] [Ki 0] [Kd 0] [sym s]])}
+  &
+  Similar to \lstinline!pd!, but for proportional+integral+derivative.
+  If \lstinline!sym = z!, then the integral is replaced by an accumulator. \\
+
   \texttt{(compose [\#* l])}
   &
   Composes multiple systems in series. Takes a variable number of arguments. \\
@@ -878,23 +894,23 @@ The core language features can be found in \lstinline!systems_sandbox.hy!.
 \subsubsection{System Analysis}
 
 \begin{longtable}{ p{0.6\textwidth} p{0.4\textwidth} }
-  \texttt{(transfer-function [S [bind \{\}]])}
+  \texttt{(transfer-function [S [bind \{\}] [sym s]])}
   &
-  Displays the transfer function of the system \texttt{S} after binding symbols according to the dictionary \texttt{bind}. \\
+  Returns the transfer function of the system \texttt{S} after binding symbols according to the dictionary \texttt{bind}. Transfer function is understood with the variable being that passed as \lstinline!sym! (\emph{e.g.}, \lstinline!z! for a discrete-time system). \\
 
-  \texttt{(zeros [S [bind \{\}]])}
+  \texttt{(zeros [S [bind \{\}] [sym s]])}
   &
-  Returns the zeros of the system \texttt{S} after binding symbols according to the dictionary \texttt{bind}. \\
+  Returns the zeros in terms of \lstinline!sym! of the system \texttt{S} after binding symbols according to the dictionary \texttt{bind}. \\
 
-  \texttt{(poles [S [bind \{\}]])}
+  \texttt{(poles [S [bind \{\}] [sym s]])}
   &
-  Returns the poles of the system \texttt{S} after binding symbols according to the dictionary \texttt{bind}. \\
+  Returns the poles in terms of \lstinline!sym! of the system \texttt{S} after binding symbols according to the dictionary \texttt{bind}. \\
 
-  \texttt{(region-of-convergence [S [bind \{\}]])}
+  \texttt{(region-of-convergence [S [bind \{\}] [sym s]])}
   &
-  Returns inequality expressing values of symbol \texttt{s} for which the transfer function of the system \texttt{S} is convergent, after binding symbols according to the dictionary \texttt{bind}. \\
+  Returns inequality expressing values of \lstinline!sym! for which the transfer function of the system \texttt{S} is convergent, after binding symbols according to the dictionary \texttt{bind}. \\
 
-  \texttt{(stable [S [bind \{\}]])}
+  \texttt{(stable [S [bind \{\}] [sym s]])}
   &
   After binding symbols according to the dictionary \texttt{bind}, either returns Boolean (True/False) value indicating if the system \texttt{S} is stable, or returns inequality indicating conditions underwhich \texttt{S} is stable if there are remaining degrees of freedom.
 \end{longtable}
@@ -902,30 +918,41 @@ The core language features can be found in \lstinline!systems_sandbox.hy!.
 \subsubsection{Plotting}
 
 \begin{longtable}{ p{0.6\textwidth} p{0.4\textwidth} }
-  \texttt{(pole-zero-plot [S [bind \{\}]] \#** kwargs)}
+  \texttt{(pole-zero-plot [S [bind \{\}]] [sym s])}
   &
   Plots the pole-zero plot of the system \texttt{S} after binding symbols according to the dictionary \texttt{bind}.
-  Passes \texttt{kwargs} to plotting function. \\
+  If \lstinline!sym = z!, show the unit circle on the plot. \\
 
-  \texttt{(impulse-plot [S [bind \{\}]] \#** kwargs)}
+  \texttt{(impulse-plot [S [bind \{\}] [sym s]])}
   &
   Plots the impulse response of the system \texttt{S} after binding symbols according to the dictionary \texttt{bind}.
-  Passes \texttt{kwargs} to plotting function. \\
+  Not implemented for \lstinline!sym = z!. \\
 
-  \texttt{(step-plot [S [bind \{\}]] \#** kwargs)}
+  \texttt{(step-plot [S [bind \{\}] [sym s]])}
   &
   Plots the step response of the system \texttt{S} after binding symbols according to the dictionary \texttt{bind}.
-  Passes \texttt{kwargs} to plotting function. \\
+  Not implemented for \lstinline!sym = z!. \\
 
-  \texttt{(ramp-plot [S [bind \{\}]] \#** kwargs)}
+  \texttt{(ramp-plot [S [bind \{\}] [sym s]])}
   &
   Plots the ramp response of the system \texttt{S} after binding symbols according to the dictionary \texttt{bind}.
-  Passes \texttt{kwargs} to plotting function. \\
+  Not implemented for \lstinline!sym = z!. \\
 
-  \texttt{(frequency-plot [S [bind \{\}] [sigma0 0]] \#** kwargs)}
+  \texttt{(frequency-plot [S [bind \{\}] [sigma0 0] [sym s]])}
   &
   After binding symbols according to the dictionary \texttt{bind}, plots the magnitude of the transfer function of the system \texttt{S} at $H(\sigma_0+j\omega)$ for varying values of $\omega$.
-  Passes \texttt{kwargs} to plotting function.
+  If \lstinline!sym = z!, plot $H(\exp(\sigma_0+j\omega))$.
+\end{longtable}
+
+\subsection{LTIza}\label{sec:reference:ltiza}
+
+\begin{longtable}{ p{0.4\textwidth} p{0.6\textwidth} }
+  \texttt{(ask-ltiza [S [sysname "S"] [bind \{\}] [sym s]])}
+  &
+  ``Natural language'' REPL to analyze the system \lstinline!S!, whose transfer function has \lstinline!sym! as the variable (defaulting to \lstinline!s!).
+  Other symbols can be bound with \lstinline!bind! before REPL is started, or bound/unbound within the interactive session.
+  \lstinline!sysname! is used to give syntax interpretation of queries, defaulting to \lstinline!S! no matter what the name of the passed system is.
+  This is a TODO item for me: I would like to figure out a way to make the function aware of the \emph{name} of the system passed to it without extra information. This might be ill-posed, unfortunately. \\
 \end{longtable}
 
 \newpage
