@@ -41,7 +41,7 @@
 
 ;; common DT systems
 (defn delay [[m 1]] (rational-polynomial "1" f"z**{m}"))
-(defn accumulate [] (rational-polynomial "z" "1-z"))
+(defn accumulate [] (rational-polynomial "z" "z-1"))
 
 ;; simple controllers
 (defn pd [[Kp 1] [Kd 0] [sym s]]
@@ -94,13 +94,13 @@
 
    ;; composed systems
    (= (get S 0) 'compose)
-   (. (Series (unpack-iterable (map (fn [T] (transfer-function T bind))
+   (. (Series (unpack-iterable (map (fn [T] (transfer-function T bind sym))
 				    (cut S 1 None))))
       (doit))
 
    ;; both parallel and generic summation
    (= (get S 0) 'sum)
-   (. (Parallel (unpack-iterable (map (fn [T] (transfer-function T bind))
+   (. (Parallel (unpack-iterable (map (fn [T] (transfer-function T bind sym))
 				      (cut S 1 None))))
       (doit))))
 
@@ -222,8 +222,8 @@
        (sympy.plot (sympy.Abs
 		    (. (transfer-function S bind sym)
 		       (to-expr)
-		       (subs {sym (sympy.exp (+ sigma0 (* 1j omega)))})))
-		   #(omega (- sympy.pi) sympy.pi)
+		       (subs {sym (sympy.e	xp (+ sigma0 (* 1j omega)))})))
+		   #(omega (- sympy.pi) sympy.pi   )
 		   :kwargs kwargs)
        (print "System not stable for given parameters."))
 
