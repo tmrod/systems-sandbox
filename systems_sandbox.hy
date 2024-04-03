@@ -223,8 +223,9 @@
        (sympy.plot (sympy.Abs
 		    (. (transfer-function S bind sym)
 		       (to-expr)
-		       (subs {sym (sympy.e	xp (+ sigma0 (* 1j omega)))})))
-		   #(omega (- sympy.pi) sympy.pi   )
+		       (subs {sym (sympy.exp (+ sigma0 (* 1j omega)))})))
+		   #(omega (- sympy.pi) sympy.pi)
+		   :axis-center #(0 0)
 		   :kwargs kwargs)
        (print "System not stable for given parameters."))
 
@@ -235,6 +236,7 @@
 		       (to-expr)
 		       (subs {sym (+ sigma0 (* 1j omega))})))
 		   #(omega -10 10)
+		   :axis-center #(0 0)
 		   :kwargs kwargs)
      (print "System not stable for given parameters."))))
 
