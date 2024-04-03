@@ -1,4 +1,5 @@
 (import sympy)
+(import sympy.plotting.plot [LineOver1DRangeSeries])
 (import sympy.physics.control :as control)
 (import sympy.physics.control [control-plots])
 (import sympy.physics.control.lti [TransferFunction Feedback Series Parallel])
@@ -15,6 +16,8 @@
 (import matplotlib.pyplot :as plt)
 (import matplotlib.pyplot [axvline axhline])
 (import matplotlib [patches])
+
+(plt.style.use "Solarize_Light2")
 
 ;; some special symbols
 (setv j (sympy.sqrt -1))
@@ -209,13 +212,14 @@
 	       fig (plt.figure)
 	       ax (. fig (add-subplot 1 1 1 :aspect "equal"))
 	       unitcirc (patches.Circle #(0 0) 1
-					:fill False :color "black" :ls "solid" :alpha 0.5)]
+					:fill False :color "black" :ls "dashed" :alpha 0.5)]
     (axvline 0 :color "0.7")
     (axhline 0 :color "0.7")
     (. ax (set-xlim (* -1 modrange) modrange))
     (. ax (set-xlabel "Re"))
     (. ax (set-ylabel "Im"))
     (. ax (set-ylim (* -1 modrange) modrange))
+    (. ax (set-title f"Poles and zeros of ${(sympy.printing.latex (transfer-function S bind sym))}$" :pad 20))
     (when (= sym z)
       (. ax (add-patch unitcirc)))
     (plt.plot (np.real pdata) (np.imag pdata)
@@ -224,29 +228,16 @@
 	      "o" :markersize 9 :alpha 0.8)
     (plt.show)))
 
-(defn frequency-plot [S [bind {}] [sigma0 0] [sym s] #** kwargs]
-  (cond
-   (= sym z)
-   (if (convergent-at (sympy.exp sigma0) S bind sym)
-       (sympy.plot (sympy.Abs
-		    (. (transfer-function S bind sym)
-		       (to-expr)
-		       (subs {sym (sympy.exp (+ sigma0 (* 1j omega)))})))
-		   #(omega (- sympy.pi) sympy.pi)
-		   :axis-center #(0 0)
-		   :kwargs kwargs)
-       (print "System not stable for given parameters."))
-
-   True
-   (if (convergent-at sigma0 S bind)
-       (sympy.plot (sympy.Abs
-		    (. (transfer-function S bind sym)
-		       (to-expr)
-		       (subs {sym (+ sigma0 (* 1j omega))})))
-		   #(omega -10 10)
-		   :axis-center #(0 0)
-		   :kwargs kwargs)
-     (print "System not stable for given parameters."))))
+(defn -plot [xs hs [title ""] [xlab ""] [ylab ""]]
+  (let [fig (plt.figure)
+	    ax (. fig (add-subplot 1 1 1))]
+    (axvline 0 :color "0.7")
+    (axhline 0 :color "0.7")
+    (. ax (set-xlabel xlab))
+    (. ax (set-ylabel ylab))
+    (. ax (set-title title :pad 20))
+    (plt.plot xs hs "-")
+    (plt.show)))
 
 (defn impulse-plot [S [bind {}] [sym s] #** kwargs]
   (cond
@@ -254,9 +245,9 @@
    (print "DT impulse response not yet implemented.")
 
    True
-   (control-plots.impulse-response-plot
-    (transfer-function S bind sym)
-    :kwargs kwargs)))
+   (let [[xs hs] (control-plots.impulse-response-numerical-data
+		  (transfer-function S bind sym))]
+     (-plot xs hs f"Impulse response of ${(sympy.printing.latex (transfer-function S bind sym))}$" "t"))))
 
 (defn step-plot [S [bind {}] [sym s] #** kwargs]
   (cond
@@ -264,9 +255,9 @@
    (print "DT step response not yet implemented.")
 
    True
-   (control-plots.step-response-plot
-    (transfer-function S bind sym)
-    :kwargs kwargs)))
+   (let [[xs hs] (control-plots.step-response-numerical-data
+		  (transfer-function S bind sym))]
+     (-plot xs hs f"Step response of ${(sympy.printing.latex (transfer-function S bind sym))}$" "t"))))
 
 (defn ramp-plot [S [bind {}] [sym s] #** kwargs]
   (cond
@@ -274,6 +265,28 @@
    (print "DT ramp response not yet implemented.")
 
    True
-   (control-plots.ramp-response-plot
-    (transfer-function S bind sym)
-    :kwargs kwargs)))
+   (let [[xs hs] (control-plots.ramp-response-numerical-data
+		  (transfer-function S bind sym))]
+     (-plot xs hs f"Ramp response of ${(sympy.printing.latex (transfer-function S bind sym))}$" "t"))))
+
+(defn frequency-plot [S [bind {}] [sigma0 0] [sym s] #** kwargs]
+  (cond
+   (= sym z)
+   (if (convergent-at (sympy.exp sigma0) S bind sym)
+       (let [[xs hs] (. (LineOver1DRangeSeries
+			 (sympy.Abs (. (transfer-function S bind sym)
+				       (to-expr)
+				       (subs {sym (sympy.exp (+ sigma0 (* 1j omega)))})))
+			 #(omega (- sympy.pi) sympy.pi)) (get-points))]
+	 (-plot xs hs f"Frequency response of ${(sympy.printing.latex (transfer-function S bind sym))}$" f"$\\omega$"))
+     (print "System not stable for given parameters."))
+
+   True
+   (if (convergent-at sigma0 S bind)
+       (let [[xs hs] (. (LineOver1DRangeSeries
+			 (sympy.Abs (. (transfer-function S bind sym)
+				       (to-expr)
+				       (subs {sym (+ sigma0 (* 1j omega))})))
+			 #(omega -10 10)) (get-points))]
+     	 (-plot xs hs f"Frequency response of ${(sympy.printing.latex (transfer-function S bind sym))}$" f"$\\omega$"))
+     (print "System not stable for given parameters."))))
