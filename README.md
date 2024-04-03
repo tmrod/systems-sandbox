@@ -2,6 +2,14 @@
 
 A domain specific language (DSL) for learning linear systems analysis.
 
+*Note:* The contents of this repo are under active development, and thus should not yet be treated as stable.
+Function behavior, syntax, and other core features may change over time.
+Use at one's own risk!
+
+I also welcome comments, pull requests, etc.
+In particular, I would find suggestions for new features and ideas about language syntax helpful.
+This DSL is implemented in a LISP, so defining new syntax is not too difficult!
+
 ## Information
 
 A DSL implemented using [Hylang](https://hylang.org/) (which is itself embedded in Python) for learning about the analysis of simple linear time-invariant systems.
