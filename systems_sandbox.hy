@@ -204,7 +204,8 @@
 	       zdata (get pzdata 0)
 	       pdata (get pzdata 1)
 	       ax (plt.subplot 1 1 1)
-	       unitcirc (patches.Circle #(0 0) 1 :fill False :color "black" :ls "solid" :alpha 0.5)]
+	       unitcirc (patches.Circle #(0 0) 1
+					:fill False :color "black" :ls "solid" :alpha 0.5)]
     (axvline 0 :color "0.7")
     (axhline 0 :color "0.7")
     (when (= sym z)
@@ -212,7 +213,7 @@
     (plt.plot (np.real pdata) (np.imag pdata)
 	      "x" :markersize 9 :alpha 0.8)
     (plt.plot (np.real zdata) (np.imag zdata)
-	      "o" :markersize 9 :alpha 0.8 :color "none")
+	      "o" :markersize 9 :alpha 0.8)
     (plt.show)))
 
 (defn frequency-plot [S [bind {}] [sigma0 0] [sym s] #** kwargs]
