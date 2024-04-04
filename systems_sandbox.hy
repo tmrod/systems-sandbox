@@ -204,30 +204,76 @@
 
 ;; plotting functions
 (defn pole-zero-plot [S [bind {}] [sym s]]
-  (let [pzdata (control-plots.pole-zero-numerical-data (transfer-function S bind sym))
-	       zdata (get pzdata 0)
-	       pdata (get pzdata 1)
-	       maxz (if (> (len zdata) 0) (np.max (np.abs zdata)) 1)
-	       maxp (if (> (len pdata) 0) (np.max (np.abs pdata)) 1)
-	       modrange (* 1.1 (np.maximum 1 (np.maximum maxz maxp)))
-	       fig (plt.figure)
-	       ax (. fig (add-subplot 1 1 1 :aspect "equal"))
-	       unitcirc (patches.Circle #(0 0) 1
-					:fill False :color "black" :ls "dashed" :alpha 0.5)]
+  (let [freesyms (. (transfer-function S bind sym) free-symbols (difference [sym]))
+		 fig (plt.figure)
+		 ax (. fig (add-subplot 1 1 1 :aspect "equal"))
+		 unitcirc (patches.Circle #(0 0) 1
+					  :fill False :color "black" :ls "dashed" :alpha 0.5)]
+
+    ;; axis setup
     (axvline 0 :color "0.7")
     (axhline 0 :color "0.7")
-    (. ax (set-xlim (* -1 modrange) modrange))
     (. ax (set-xlabel "Re"))
     (. ax (set-ylabel "Im"))
-    (. ax (set-ylim (* -1 modrange) modrange))
     (. ax (set-title f"Poles and zeros of ${(sympy.printing.latex (transfer-function S bind sym))}$" :pad 20))
     (when (= sym z)
       (. ax (add-patch unitcirc)))
-    (plt.plot (np.real pdata) (np.imag pdata)
-	      "x" :markersize 9 :alpha 0.8)
-    (plt.plot (np.real zdata) (np.imag zdata)
-	      "o" :markersize 9 :alpha 0.8)
-    (plt.show)))
+
+    (cond
+     ;; no free symbols
+     (= (len freesyms) 0)
+     (let [[zdata pdata] (control-plots.pole-zero-numerical-data (transfer-function S bind sym))
+	   maxz (if (> (len zdata) 0) (np.max (np.abs zdata)) 1)
+	   maxp (if (> (len pdata) 0) (np.max (np.abs pdata)) 1)
+	   modrange (* 1.1 (np.maximum 1 (np.maximum maxz maxp)))]
+       (. ax (set-xlim (* -1 modrange) modrange))
+       (. ax (set-ylim (* -1 modrange) modrange))
+       (plt.plot (np.real pdata) (np.imag pdata)
+		 "x" :markersize 9 :alpha 0.8)
+       (plt.plot (np.real zdata) (np.imag zdata)
+		 "o" :markersize 9 :alpha 0.8)
+       (plt.show))
+
+     ;; one free symbol
+     (= (len freesyms) 1)
+     ;;(print "One free symbol not yet supported.")
+     (let [freesym (. freesyms (pop))]
+	 (. fig (subplots-adjust :bottom 0.25))
+	 (setv slider-ax (. fig (add-axes [0.15 0.1 0.7 0.03])))
+	 (setv slider (Slider slider-ax (str freesym)
+			      -5 5 :valinit 0))
+
+	 ;; initial plot
+	 (setv [zdata pdata] (control-plots.pole-zero-numerical-data (. (transfer-function S bind sym) (subs {freesym 0}))))
+	 (setv maxz (if (> (len zdata) 0) (np.max (np.abs zdata)) 1))
+	 (setv maxp (if (> (len pdata) 0) (np.max (np.abs pdata)) 1))
+	 (setv modrange (* 1.1 (np.maximum 1 (np.maximum maxz maxp))))
+	 (. ax (set-xlim (* -1 modrange) modrange))
+	 (. ax (set-ylim (* -1 modrange) modrange))
+	 (setv [pline] (. ax (plot (np.real pdata) (np.imag pdata)
+				   "x" :markersize 9 :alpha 0.8)))
+	 (setv [zline] (. ax (plot (np.real zdata) (np.imag zdata)
+				   "o" :markersize 9 :alpha 0.8)))
+
+	 ;; define update function and bind to slider
+	 (defn slider-on-changed [val]
+	   (let [[zdata pdata] (control-plots.pole-zero-numerical-data (. (transfer-function S bind sym) (subs {freesym val})))
+		 maxz (if (> (len zdata) 0) (np.max (np.abs zdata)) 1)
+		 maxp (if (> (len pdata) 0) (np.max (np.abs pdata)) 1)
+		 modrange (* 1.1 (np.maximum 1 (np.maximum maxz maxp)))]
+	     (. ax (set-xlim (* -1 modrange) modrange))
+	     (. ax (set-ylim (* -1 modrange) modrange))
+	     (. pline (set-xdata (np.real pdata)))
+	     (. pline (set-ydata (np.imag pdata)))
+	     (. zline (set-xdata (np.real zdata)))
+	     (. zline (set-ydata (np.imag zdata)))
+	     (. fig.canvas (draw-idle))))
+	 (. slider (on-changed slider-on-changed))
+	 (plt.show))
+
+     ;; multiple free symbols
+     True
+     (print "Multiple free symbols not yet supported."))))
 
 (defn -plot [xs hs [title ""] [xlab ""] [ylab ""]]
   (let [fig (plt.figure)
