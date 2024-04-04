@@ -16,6 +16,7 @@
 (import matplotlib.pyplot :as plt)
 (import matplotlib.pyplot [axvline axhline])
 (import matplotlib [patches])
+(import matplotlib.widgets [Slider])
 
 (plt.style.use "Solarize_Light2")
 
@@ -239,15 +240,79 @@
     (plt.plot xs hs "-")
     (plt.show)))
 
+(defn -plot-with-slider [data-fun [sliderlab ""] [title ""] [xlab ""] [ylab ""]
+				  [lbnd 0] [ubnd None]
+				  * [valinit 0] [valrange [-5 5]]]
+  (let [fig (plt.figure)
+	    ax (. fig (add-subplot 1 1 1))]
+
+    ;; general drawing and setup
+    (axvline 0 :color "0.7")
+    (axhline 0 :color "0.7")
+    (. ax (set-xlabel xlab))
+    (. ax (set-ylabel ylab))
+    (. ax (set-title title :pad 20))
+    (. fig (subplots-adjust :bottom 0.25))
+    (setv slider-ax (. fig (add-axes [0.15 0.1 0.7 0.03])))
+    (setv slider (Slider slider-ax sliderlab
+			 (unpack-iterable valrange) :valinit valinit))
+
+    ;; initial plot
+    (setv [xs hs] (data-fun valinit))
+    (setv [line] (. ax (plot xs hs "-")))
+
+    ;; define update function and bind to slider
+    (defn slider-on-changed [val]
+      (setv current-xlim (. ax (get-xlim)))
+      (setv [xs hs] (data-fun val
+			      :lower-limit (np.clip (get current-xlim 0) lbnd ubnd)
+			      :upper-limit (np.clip (get current-xlim 1) lbnd ubnd)))
+      (. line (set-xdata xs))
+      (. line (set-ydata hs))
+      (. fig.canvas (draw-idle)))
+    (. slider (on-changed slider-on-changed))
+
+    (plt.show)))
+
+(defn response-plot [S numdatafn titlepfx [bind {}] [sym s] [xlab "t"]
+		       [lbnd 0] [ubnd None] [xmininit 0] [xmaxinit 1]
+		       #** kwargs]
+  (let [freesyms (. (transfer-function S bind sym) free-symbols (difference [sym]))]
+    (cond
+     ;; no free symbols
+     (= (len freesyms) 0)
+     (let [[xs hs] (numdatafn (transfer-function S bind sym))]
+       (-plot xs hs f"{titlepfx} response of ${(sympy.printing.latex (transfer-function S bind sym))}$" "t"))
+
+     ;; one free symbol
+     (= (len freesyms) 1)
+     (let [freesym (. freesyms (pop))]
+       (-plot-with-slider (fn [val [lower-limit xmininit] [upper-limit xmaxinit]]
+			      (numdatafn
+			       (. (transfer-function S bind sym) (subs {freesym val}))
+			       :lower-limit lower-limit
+			       :upper-limit upper-limit
+			       :nb-of-points 64))
+			  (str freesym)
+			  f"{titlepfx} response of ${(sympy.printing.latex (transfer-function S bind sym))}$" xlab
+			  :lbnd lbnd
+			  :ubnd ubnd))
+
+     ;; more than one free symbol
+     True
+     (print "Multiple free symbols not yet supported."))))
+
 (defn impulse-plot [S [bind {}] [sym s] #** kwargs]
   (cond
    (= sym z)
    (print "DT impulse response not yet implemented.")
 
    True
-   (let [[xs hs] (control-plots.impulse-response-numerical-data
-		  (transfer-function S bind sym))]
-     (-plot xs hs f"Impulse response of ${(sympy.printing.latex (transfer-function S bind sym))}$" "t"))))
+   (response-plot S control-plots.impulse-response-numerical-data "Impulse"
+		  bind sym
+		  :xmininit 0
+		  :xmaxinit 10
+		  :kwargs kwargs)))
 
 (defn step-plot [S [bind {}] [sym s] #** kwargs]
   (cond
@@ -255,9 +320,11 @@
    (print "DT step response not yet implemented.")
 
    True
-   (let [[xs hs] (control-plots.step-response-numerical-data
-		  (transfer-function S bind sym))]
-     (-plot xs hs f"Step response of ${(sympy.printing.latex (transfer-function S bind sym))}$" "t"))))
+   (response-plot S control-plots.step-response-numerical-data "Step"
+		  bind sym
+		  :xmininit 0
+		  :xmaxinit 10
+		  :kwargs kwargs)))
 
 (defn ramp-plot [S [bind {}] [sym s] #** kwargs]
   (cond
@@ -265,28 +332,40 @@
    (print "DT ramp response not yet implemented.")
 
    True
-   (let [[xs hs] (control-plots.ramp-response-numerical-data
-		  (transfer-function S bind sym))]
-     (-plot xs hs f"Ramp response of ${(sympy.printing.latex (transfer-function S bind sym))}$" "t"))))
+   (response-plot S control-plots.ramp-response-numerical-data "Ramp"
+		  bind sym
+		  :xmininit 0
+		  :xmaxinit 10
+		  :kwargs kwargs)))
 
 (defn frequency-plot [S [bind {}] [sigma0 0] [sym s] #** kwargs]
   (cond
    (= sym z)
-   (if (convergent-at (sympy.exp sigma0) S bind sym)
-       (let [[xs hs] (. (LineOver1DRangeSeries
-			 (sympy.Abs (. (transfer-function S bind sym)
-				       (to-expr)
-				       (subs {sym (sympy.exp (+ sigma0 (* 1j omega)))})))
-			 #(omega (- sympy.pi) sympy.pi)) (get-points))]
-	 (-plot xs hs f"Frequency response of ${(sympy.printing.latex (transfer-function S bind sym))}$" f"$\\omega$"))
-     (print "System not stable for given parameters."))
+   (response-plot S
+		  (fn [tf [lower-limit (- np.pi)] [upper-limit np.pi] [nb-of-points 64]]
+		      (. (LineOver1DRangeSeries
+			  (sympy.Abs (. tf (to-expr) (subs {sym (sympy.exp (+ sigma0 (* 1j omega)))})))
+			  #(omega lower-limit upper-limit)) (get-points)))
+		  "Frequency"
+		  bind sym
+		  f"$\\omega$"
+		  :lbnd (- np.inf)
+		  :ubnd None
+		  :xmininit (- np.pi)
+		  :xmaxinit np.pi
+		  :kwargs kwargs)
 
    True
-   (if (convergent-at sigma0 S bind)
-       (let [[xs hs] (. (LineOver1DRangeSeries
-			 (sympy.Abs (. (transfer-function S bind sym)
-				       (to-expr)
-				       (subs {sym (+ sigma0 (* 1j omega))})))
-			 #(omega -10 10)) (get-points))]
-     	 (-plot xs hs f"Frequency response of ${(sympy.printing.latex (transfer-function S bind sym))}$" f"$\\omega$"))
-     (print "System not stable for given parameters."))))
+   (response-plot S
+		  (fn [tf [lower-limit -1] [upper-limit 1] [nb-of-points 64]]
+		      (. (LineOver1DRangeSeries
+			  (sympy.Abs (. tf (to-expr) (subs {sym (+ sigma0 (* 1j omega))})))
+			  #(omega lower-limit upper-limit)) (get-points)))
+		  "Frequency"
+		  bind sym
+		  f"$\\omega$"
+		  :lbnd (- np.inf)
+		  :ubnd None
+		  :xmininit -10
+		  :xmaxinit 10
+		  :kwargs kwargs)))
