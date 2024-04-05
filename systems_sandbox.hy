@@ -203,150 +203,53 @@
 			   0))))
 
 ;; plotting functions
-(defn pole-zero-plot [S [bind {}] [sym s]]
-  (let [freesyms (. (transfer-function S bind sym) free-symbols (difference [sym]))
-		 fig (plt.figure)
-		 ax (. fig (add-subplot 1 1 1 :aspect "equal"))
-		 unitcirc (patches.Circle #(0 0) 1
-					  :fill False :color "black" :ls "dashed" :alpha 0.5)]
 
-    ;; axis setup
-    (axvline 0 :color "0.7")
-    (axhline 0 :color "0.7")
-    (. ax (set-xlabel "Re"))
-    (. ax (set-ylabel "Im"))
-    (. ax (set-title f"Poles and zeros of ${(sympy.printing.latex (transfer-function S bind sym))}$" :pad 20))
-    (when (= sym z)
-      (. ax (add-patch unitcirc)))
-
-    (cond
-     ;; no free symbols
-     (= (len freesyms) 0)
-     (let [[zdata pdata] (control-plots.pole-zero-numerical-data (transfer-function S bind sym))
-	   maxz (if (> (len zdata) 0) (np.max (np.abs zdata)) 1)
-	   maxp (if (> (len pdata) 0) (np.max (np.abs pdata)) 1)
-	   modrange (* 1.1 (np.maximum 1 (np.maximum maxz maxp)))]
-       (. ax (set-xlim (* -1 modrange) modrange))
-       (. ax (set-ylim (* -1 modrange) modrange))
-       (plt.plot (np.real pdata) (np.imag pdata)
-		 "x" :markersize 9 :alpha 0.8)
-       (plt.plot (np.real zdata) (np.imag zdata)
-		 "o" :markersize 9 :alpha 0.8)
-       (plt.show))
-
-     ;; one free symbol
-     (= (len freesyms) 1)
-     ;;(print "One free symbol not yet supported.")
-     (let [freesym (. freesyms (pop))]
-	 (. fig (subplots-adjust :bottom 0.25))
-	 (setv slider-ax (. fig (add-axes [0.15 0.1 0.7 0.03])))
-	 (setv slider (Slider slider-ax (str freesym)
-			      -5 5 :valinit 0))
-
-	 ;; initial plot
-	 (setv [zdata pdata] (control-plots.pole-zero-numerical-data (. (transfer-function S bind sym) (subs {freesym 0}))))
-	 (setv maxz (if (> (len zdata) 0) (np.max (np.abs zdata)) 1))
-	 (setv maxp (if (> (len pdata) 0) (np.max (np.abs pdata)) 1))
-	 (setv modrange (* 1.1 (np.maximum 1 (np.maximum maxz maxp))))
-	 (. ax (set-xlim (* -1 modrange) modrange))
-	 (. ax (set-ylim (* -1 modrange) modrange))
-	 (setv [pline] (. ax (plot (np.real pdata) (np.imag pdata)
-				   "x" :markersize 9 :alpha 0.8)))
-	 (setv [zline] (. ax (plot (np.real zdata) (np.imag zdata)
-				   "o" :markersize 9 :alpha 0.8)))
-
-	 ;; define update function and bind to slider
-	 (defn slider-on-changed [val]
-	   (let [[zdata pdata] (control-plots.pole-zero-numerical-data (. (transfer-function S bind sym) (subs {freesym val})))
-		 maxz (if (> (len zdata) 0) (np.max (np.abs zdata)) 1)
-		 maxp (if (> (len pdata) 0) (np.max (np.abs pdata)) 1)
-		 modrange (* 1.1 (np.maximum 1 (np.maximum maxz maxp)))]
-	     (. ax (set-xlim (* -1 modrange) modrange))
-	     (. ax (set-ylim (* -1 modrange) modrange))
-	     (. pline (set-xdata (np.real pdata)))
-	     (. pline (set-ydata (np.imag pdata)))
-	     (. zline (set-xdata (np.real zdata)))
-	     (. zline (set-ydata (np.imag zdata)))
-	     (. fig.canvas (draw-idle))))
-	 (. slider (on-changed slider-on-changed))
-	 (plt.show))
-
-     ;; multiple free symbols
-     True
-     (print "Multiple free symbols not yet supported."))))
-
-(defn -plot [xs hs [title ""] [xlab ""] [ylab ""]]
+;; num-funs is a list of functions
+;; plot-funs is a corresponding list of plotting functions
+(defn -plot-with-sliders [num-funs expr [sym s]
+				   [lbnd 0] [ubnd None]
+				   [xlim-init [0 10]] [ylim-init [0 1]]
+				   * [plot-funs [(fn [ax x y] (ax.plot x y))]]
+				   [ax-setup-fun (fn [ax] None)]]
+  (assert (= (len num-funs) (len plot-funs)) "num-funs and plot-funs should be the same length")
   (let [fig (plt.figure)
-	    ax (. fig (add-subplot 1 1 1))]
-    (axvline 0 :color "0.7")
-    (axhline 0 :color "0.7")
-    (. ax (set-xlabel xlab))
-    (. ax (set-ylabel ylab))
-    (. ax (set-title title :pad 20))
-    (plt.plot xs hs "-")
-    (plt.show)))
+	    ax (fig.add-subplot 1 1 1)
+	    freesyms (expr.free-symbols.difference [sym])
+	    slider-labels (list (map str freesyms))]
+    ;; set up figure and slider hardware
+    (ax-setup-fun ax)
+    (when (> (len freesyms) 0) (fig.subplots-adjust :bottom 0.25))
+    (setv slider-axs (map (fn [idx-label] (fig.add-axes [0.15
+							 (* 0.05 (+ 1 (get idx-label 0)))
+							 0.7 0.05]))
+			  (enumerate slider-labels)))
+    (setv sliders (list (map (fn [x] (Slider (unpack-iterable x) -5 5 :valinit 0))
+			     (zip slider-axs slider-labels))))
 
-(defn -plot-with-slider [data-fun [sliderlab ""] [title ""] [xlab ""] [ylab ""]
-				  [lbnd 0] [ubnd None]
-				  * [valinit 0] [valrange [-5 5]]]
-  (let [fig (plt.figure)
-	    ax (. fig (add-subplot 1 1 1))]
+    (setv lines (lfor plot-fun plot-funs (plot-fun ax
+						   (np.linspace (unpack-iterable xlim-init) 3)
+						   (np.linspace (unpack-iterable ylim-init) 3))))
 
-    ;; general drawing and setup
-    (axvline 0 :color "0.7")
-    (axhline 0 :color "0.7")
-    (. ax (set-xlabel xlab))
-    (. ax (set-ylabel ylab))
-    (. ax (set-title title :pad 20))
-    (. fig (subplots-adjust :bottom 0.25))
-    (setv slider-ax (. fig (add-axes [0.15 0.1 0.7 0.03])))
-    (setv slider (Slider slider-ax sliderlab
-			 (unpack-iterable valrange) :valinit valinit))
+    (defn update-fun [[v None]]
+      (let [[xmin xmax] (ax.get-xlim)
+	    var-start-end #(sym (np.clip xmin lbnd ubnd) (np.clip xmax lbnd ubnd))
+	    sub-dict (dfor x (zip freesyms sliders) (get x 0) (. (get x 1) val))
+	    xyss (lfor num-fun num-funs (num-fun (expr.subs sub-dict) var-start-end))]
 
-    ;; initial plot
-    (setv [xs hs] (data-fun valinit))
-    (setv [line] (. ax (plot xs hs "-")))
+	(for [[line xys] (zip lines xyss)]
+	     (. (get line 0) (set-xdata (get xys 0)))
+	     (. (get line 0) (set-ydata (get xys 1))))
 
-    ;; define update function and bind to slider
-    (defn slider-on-changed [val]
-      (setv current-xlim (. ax (get-xlim)))
-      (setv [xs hs] (data-fun val
-			      :lower-limit (np.clip (get current-xlim 0) lbnd ubnd)
-			      :upper-limit (np.clip (get current-xlim 1) lbnd ubnd)))
-      (. line (set-xdata xs))
-      (. line (set-ydata hs))
-      (. fig.canvas (draw-idle)))
-    (. slider (on-changed slider-on-changed))
+	(ax.relim)
+	(ax.autoscale-view)
+
+	(fig.canvas.draw-idle)))
+
+    (update-fun)
+
+    (for [sl sliders] (sl.on-changed update-fun))
 
     (plt.show)))
-
-(defn response-plot [S numdatafn titlepfx [bind {}] [sym s] [xlab "t"]
-		       [lbnd 0] [ubnd None] [xmininit 0] [xmaxinit 1]
-		       #** kwargs]
-  (let [freesyms (. (transfer-function S bind sym) free-symbols (difference [sym]))]
-    (cond
-     ;; no free symbols
-     (= (len freesyms) 0)
-     (let [[xs hs] (numdatafn (transfer-function S bind sym))]
-       (-plot xs hs f"{titlepfx} response of ${(sympy.printing.latex (transfer-function S bind sym))}$" "t"))
-
-     ;; one free symbol
-     (= (len freesyms) 1)
-     (let [freesym (. freesyms (pop))]
-       (-plot-with-slider (fn [val [lower-limit xmininit] [upper-limit xmaxinit]]
-			      (numdatafn
-			       (. (transfer-function S bind sym) (subs {freesym val}))
-			       :lower-limit lower-limit
-			       :upper-limit upper-limit
-			       :nb-of-points 64))
-			  (str freesym)
-			  f"{titlepfx} response of ${(sympy.printing.latex (transfer-function S bind sym))}$" xlab
-			  :lbnd lbnd
-			  :ubnd ubnd))
-
-     ;; more than one free symbol
-     True
-     (print "Multiple free symbols not yet supported."))))
 
 (defn impulse-plot [S [bind {}] [sym s] #** kwargs]
   (cond
@@ -354,11 +257,12 @@
    (print "DT impulse response not yet implemented.")
 
    True
-   (response-plot S control-plots.impulse-response-numerical-data "Impulse"
-		  bind sym
-		  :xmininit 0
-		  :xmaxinit 10
-		  :kwargs kwargs)))
+   (-plot-with-sliders
+    [(fn [expr var-start-end] (control-plots.impulse-response-numerical-data expr
+									     :lower-limit (get var-start-end 1)
+									     :upper-limit (get var-start-end 2)))]
+    (transfer-function S :bind {} :sym s) s
+    :lbnd 0 :ubnd 50)))
 
 (defn step-plot [S [bind {}] [sym s] #** kwargs]
   (cond
@@ -366,11 +270,12 @@
    (print "DT step response not yet implemented.")
 
    True
-   (response-plot S control-plots.step-response-numerical-data "Step"
-		  bind sym
-		  :xmininit 0
-		  :xmaxinit 10
-		  :kwargs kwargs)))
+   (-plot-with-sliders
+    [(fn [expr var-start-end] (control-plots.step-response-numerical-data expr
+									  :lower-limit (get var-start-end 1)
+									  :upper-limit (get var-start-end 2)))]
+    (transfer-function S :bind {} :sym s) s
+    :lbnd 0 :ubnd 50)))
 
 (defn ramp-plot [S [bind {}] [sym s] #** kwargs]
   (cond
@@ -378,40 +283,60 @@
    (print "DT ramp response not yet implemented.")
 
    True
-   (response-plot S control-plots.ramp-response-numerical-data "Ramp"
-		  bind sym
-		  :xmininit 0
-		  :xmaxinit 10
-		  :kwargs kwargs)))
+   (-plot-with-sliders
+    [(fn [expr var-start-end] (control-plots.ramp-response-numerical-data expr :lower-limit (get var-start-end 1) :upper-limit (get var-start-end 2)))]
+    (transfer-function S :bind {} :sym s) s
+    :lbnd 0 :ubnd 50)))
 
 (defn frequency-plot [S [bind {}] [sigma0 0] [sym s] #** kwargs]
-  (cond
-   (= sym z)
-   (response-plot S
-		  (fn [tf [lower-limit (- np.pi)] [upper-limit np.pi] [nb-of-points 64]]
-		      (. (LineOver1DRangeSeries
-			  (sympy.Abs (. tf (to-expr) (subs {sym (sympy.exp (+ sigma0 (* 1j omega)))})))
-			  #(omega lower-limit upper-limit)) (get-points)))
-		  "Frequency"
-		  bind sym
-		  f"$\\omega$"
-		  :lbnd (- np.inf)
-		  :ubnd None
-		  :xmininit (- np.pi)
-		  :xmaxinit np.pi
-		  :kwargs kwargs)
+  (let [tf-expr (. (transfer-function S :bind bind :sym sym) (to-expr))]
+    (cond
+     (= sym z)
+     (-plot-with-sliders
+      [(fn [expr var-start-end] (. (LineOver1DRangeSeries
+				   (sympy.Abs (expr.subs {sym (sympy.exp (+ sigma0 (* 1j omega)))}))
+				   #(omega (get var-start-end 1) (get var-start-end 2)))
+				  (get-points)))]
+      tf-expr sym
+      :lbnd (* -6 np.pi) :ubnd (* 6 np.pi)
+      :xlim-init [(- np.pi) (np.pi)] :ylim-init [0 1])
 
-   True
-   (response-plot S
-		  (fn [tf [lower-limit -1] [upper-limit 1] [nb-of-points 64]]
-		      (. (LineOver1DRangeSeries
-			  (sympy.Abs (. tf (to-expr) (subs {sym (+ sigma0 (* 1j omega))})))
-			  #(omega lower-limit upper-limit)) (get-points)))
-		  "Frequency"
-		  bind sym
-		  f"$\\omega$"
-		  :lbnd (- np.inf)
-		  :ubnd None
-		  :xmininit -10
-		  :xmaxinit 10
-		  :kwargs kwargs)))
+     True
+     (-plot-with-sliders
+      [(fn [expr var-start-end] (. (LineOver1DRangeSeries
+				   (sympy.Abs (expr.subs {sym (+ sigma0 (* 1j omega))}))
+				   #(omega (get var-start-end 1) (get var-start-end 2)))
+				  (get-points)))]
+      tf-expr sym
+      :lbnd -50 :ubnd 50
+      :xlim-init [-10 10] :ylim-init [0 1]))))
+
+(defn pole-zero-plot [S [bind {}] [sym s]]
+  (defn poles-num-fun [expr var-start-end]
+    (let [[zdata pdata] (control-plots.pole-zero-numerical-data expr)] (return [(np.real pdata) (np.imag pdata)])))
+  (defn zeros-num-fun [expr var-start-end]
+    (let [[zdata pdata] (control-plots.pole-zero-numerical-data expr)]
+      (return [(np.real zdata) (np.imag zdata)])))
+  (defn poles-plot-fun [ax xs ys]
+    (ax.plot xs ys "x" :markersize 9 :alpha 0.8))
+  (defn zeros-plot-fun [ax xs ys]
+    (ax.plot xs ys "o" :markersize 9 :alpha 0.8 :fillstyle "none"))
+
+  (defn ax-setup-fun [ax]
+    (axvline 0 :color "0.7")
+    (axhline 0 :color "0.7")
+    (ax.set-aspect "equal")
+    (ax.set-xlabel "Re")
+    (ax.set-ylabel "Im")
+    (ax.set-title f"Poles and zeros of ${(sympy.printing.latex (transfer-function S bind sym))}$" :pad 20)
+    (when (= sym z)
+      (ax.add-patch (patches.Circle #(0 0) 1 :fill False :color "black" :ls "dashed" :alpha 0.5))))
+
+  (setv num-funs [poles-num-fun zeros-num-fun])
+  (setv plot-funs [poles-plot-fun zeros-plot-fun])
+
+  (-plot-with-sliders num-funs (transfer-function S bind sym) sym
+		      :plot-funs plot-funs
+		      :ax-setup-fun ax-setup-fun
+		      :lbnd (- np.inf) :ubnd None
+		      :xlim-init [-1.2 1.2] :ylim-init [-1.2 1.2]))
