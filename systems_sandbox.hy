@@ -251,65 +251,78 @@
 
     (plt.show)))
 
-(defn impulse-plot [S [bind {}] [sym s] #** kwargs]
+(defn response-plot [S [bind {}] [sym s]
+		       [numdatafun control-plots.impulse-response-numerical-data]
+		       [responsename "Impulse"]
+		       #** kwargs]
+  (defn ax-setup-fun [ax]
+    (axvline 0 :color "0.7")
+    (axhline 0 :color "0.7")
+    (ax.set-xlabel "$t$")
+    (ax.set-title f"{responsename} response of ${(sympy.printing.latex (transfer-function S bind sym))}$" :pad 20))
+
   (cond
    (= sym z)
-   (print "DT impulse response not yet implemented.")
+   (print f"DT {responsename} response not yet implemented.")
 
    True
    (-plot-with-sliders
-    [(fn [expr var-start-end] (control-plots.impulse-response-numerical-data expr
-									     :lower-limit (get var-start-end 1)
-									     :upper-limit (get var-start-end 2)))]
+    [(fn [expr var-start-end] (numdatafun expr
+					  :lower-limit (get var-start-end 1)
+					  :upper-limit (get var-start-end 2)))]
     (transfer-function S :bind {} :sym s) s
-    :lbnd 0 :ubnd 50)))
+    :lbnd 0 :ubnd 50
+    :ax-setup-fun ax-setup-fun)))
+
+(defn impulse-plot [S [bind {}] [sym s] #** kwargs]
+  (response-plot S bind sym
+		 control-plots.impulse-response-numerical-data
+		 "Impulse"
+		 :kwargs kwargs))
 
 (defn step-plot [S [bind {}] [sym s] #** kwargs]
-  (cond
-   (= sym z)
-   (print "DT step response not yet implemented.")
-
-   True
-   (-plot-with-sliders
-    [(fn [expr var-start-end] (control-plots.step-response-numerical-data expr
-									  :lower-limit (get var-start-end 1)
-									  :upper-limit (get var-start-end 2)))]
-    (transfer-function S :bind {} :sym s) s
-    :lbnd 0 :ubnd 50)))
+  (response-plot S bind sym
+		 control-plots.step-response-numerical-data
+		 "Step"
+		 :kwargs kwargs))
 
 (defn ramp-plot [S [bind {}] [sym s] #** kwargs]
-  (cond
-   (= sym z)
-   (print "DT ramp response not yet implemented.")
-
-   True
-   (-plot-with-sliders
-    [(fn [expr var-start-end] (control-plots.ramp-response-numerical-data expr :lower-limit (get var-start-end 1) :upper-limit (get var-start-end 2)))]
-    (transfer-function S :bind {} :sym s) s
-    :lbnd 0 :ubnd 50)))
+  (response-plot S bind sym
+		 control-plots.ramp-response-numerical-data
+		 "Ramp"
+		 :kwargs kwargs))
 
 (defn frequency-plot [S [bind {}] [sigma0 0] [sym s] #** kwargs]
+  (defn ax-setup-fun [ax]
+    (axvline 0 :color "0.7")
+    (axhline 0 :color "0.7")
+    (ax.set-xlabel "$\\omega$")
+    (ax.set-ylabel "$|F|$")
+    (ax.set-title f"Frequency response of ${(sympy.printing.latex (transfer-function S bind sym))}$" :pad 20))
+
   (let [tf-expr (. (transfer-function S :bind bind :sym sym) (to-expr))]
     (cond
      (= sym z)
      (-plot-with-sliders
       [(fn [expr var-start-end] (. (LineOver1DRangeSeries
-				   (sympy.Abs (expr.subs {sym (sympy.exp (+ sigma0 (* 1j omega)))}))
-				   #(omega (get var-start-end 1) (get var-start-end 2)))
-				  (get-points)))]
+				    (sympy.Abs (expr.subs {sym (sympy.exp (+ sigma0 (* 1j omega)))}))
+				    #(omega (get var-start-end 1) (get var-start-end 2)))
+				   (get-points)))]
       tf-expr sym
       :lbnd (* -6 np.pi) :ubnd (* 6 np.pi)
-      :xlim-init [(- np.pi) (np.pi)] :ylim-init [0 1])
+      :xlim-init [(- np.pi) (np.pi)] :ylim-init [0 1]
+      :ax-setup-fun ax-setup-fun)
 
      True
      (-plot-with-sliders
       [(fn [expr var-start-end] (. (LineOver1DRangeSeries
-				   (sympy.Abs (expr.subs {sym (+ sigma0 (* 1j omega))}))
-				   #(omega (get var-start-end 1) (get var-start-end 2)))
-				  (get-points)))]
+				    (sympy.Abs (expr.subs {sym (+ sigma0 (* 1j omega))}))
+				    #(omega (get var-start-end 1) (get var-start-end 2)))
+				   (get-points)))]
       tf-expr sym
       :lbnd -50 :ubnd 50
-      :xlim-init [-10 10] :ylim-init [0 1]))))
+      :xlim-init [-10 10] :ylim-init [0 1]
+      :ax-setup-fun ax-setup-fun))))
 
 (defn pole-zero-plot [S [bind {}] [sym s]]
   (defn poles-num-fun [expr var-start-end]
@@ -329,8 +342,9 @@
     (ax.set-xlabel "Re")
     (ax.set-ylabel "Im")
     (ax.set-title f"Poles and zeros of ${(sympy.printing.latex (transfer-function S bind sym))}$" :pad 20)
-    (when (= sym z)
-      (ax.add-patch (patches.Circle #(0 0) 1 :fill False :color "black" :ls "dashed" :alpha 0.5))))
+    (if (= sym z)
+	(ax.add-patch (patches.Circle #(0 0) 1 :fill False :color "black" :ls "dashed" :alpha 0.5))
+      (ax.add-patch (patches.Circle #(0 0) 0.2 :fill False :alpha 0.0))))
 
   (setv num-funs [poles-num-fun zeros-num-fun])
   (setv plot-funs [poles-plot-fun zeros-plot-fun])
