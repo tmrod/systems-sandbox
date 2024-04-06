@@ -20,6 +20,8 @@
 
 (plt.style.use "Solarize_Light2")
 
+(import pydot)
+
 ;; some special symbols
 (setv j (sympy.sqrt -1))
 (setv i (sympy.sqrt -1))
@@ -39,26 +41,28 @@
 (defn sum [#* l] (+ ['sum] (list l)))
 
 ;; common CT systems
-(defn gain [[gain 1]] `(system (rat ~gain [] [])))
-(defn derivative [] `(system (rat 1 [0] [])))
-(defn integrate [] `(system (rat 1 [] [0])))
+(defn gain [[gain 1]] `(system (gn ~gain)))
+(defn derivative [] `(system (drv)))
+(defn integrate [] `(system (int)))
 
 ;; common DT systems
-(defn delay [[m 1]] (rational-polynomial "1" f"z**{m}"))
-(defn accumulate [] (rational-polynomial "z" "z-1"))
+(defn delay [[m 1]] `(system (dl ~m)))
+(defn accumulate [] `(system (acc)))
 
 ;; simple controllers
 (defn pd [[Kp 1] [Kd 0] [sym s]]
-  (let [dd (cond (= sym z) (delay) True (derivative))]
-    (parallel (gain Kp)
-	      (compose (gain Kd)
-		       dd))))
+  ;; (let [dd (cond (= sym z) (delay) True (derivative))]
+  ;;   (parallel (gain Kp)
+  ;; 	      (compose (gain Kd)
+  ;; 		       dd))))
+  `(system (pd ~Kp ~Kd)))
 
 (defn pid [[Kp 1] [Ki 0] [Kd 0] [sym s]]
-  (let [ii (cond (= sym z) (accumulate) True (integrate))]
-    (parallel (pd Kp Kd)
-	      (compose (gain Ki)
-		       ii))))
+  ;; (let [ii (cond (= sym z) (accumulate) True (integrate))]
+  ;;   (parallel (pd Kp Kd)
+  ;; 	      (compose (gain Ki)
+  ;; 		       ii))))
+  `(system (pid ~Kp ~Ki ~Kd)))
 
 ;; compute symbolic transfer function of system
 (defn cancel [tf [sym s]] (TransferFunction.from_rational_expression (.
@@ -81,11 +85,59 @@
 			   sym)
 	 (subs bind)))
 
+    ;; rational polynomial
     (= (get (get S 1) 0) 'rat-poly)
     (let [num (get (get S 1) 1)
 	      den (get (get S 1) 2)]
       (. (TransferFunction.from-rational-expression (/ num den) sym)
 	 (subs bind)))
+
+    ;; gain
+    (= (get (get S 1) 0) 'gn)
+    (. (TransferFunction (get (get S 1) 1) 1 sym) (subs bind))
+
+    ;; derivative
+    (= (get (get S 1) 0) 'drv)
+    (TransferFunction sym 1 sym)
+
+    ;; integral
+    (= (get (get S 1) 0) 'int)
+    (TransferFunction 1 sym sym)
+
+    ;; delay (DT)
+    (= (get (get S 1) 0) 'dl)
+    (. (TransferFunction 1 (** sym (get (get S 1) 1)) sym) (subs bind))
+
+    ;; accum (DT)
+    (= (get (get S 1) 0) 'acc)
+    (TransferFunction sym (- sym 1) sym)
+
+    ;; PD
+    (= (get (get S 1) 0) 'pd)
+    (let [Kp (get (get S 1) 1)
+	     Kd (get (get S 1) 2)]
+      (cond
+       (= sym z)
+       (. (TransferFunction (- (* (+ Kp Kd) sym) Kd) sym sym) (subs bind))
+
+       True
+       (. (TransferFunction (+ Kp (* Kd sym)) 1 sym) (subs bind))))
+
+    ;; PID
+    (= (get (get S 1) 0) 'pid)
+    (let [Kp (get (get S 1) 1)
+	     Ki (get (get S 1) 2)
+	     Kd (get (get S 1) 3)]
+      (cond
+       (= sym z)
+       (. (TransferFunction (+ (* (+ Kp Ki Kd) (** sym 2))
+			       (* (+ (- Kp) (* -2 Kd)) sym)
+			       Kd)
+			    (- (** sym 2) sym)
+			    sym) (subs bind))
+
+       True
+       (. (TransferFunction (+ (* Kd (** sym 2)) (* Kp sym) Ki) sym sym) (subs bind))))
 
     True
     (raise ValueError))
@@ -373,3 +425,161 @@
 		      :lbnd (- np.inf) :ubnd None
 		      :xlim-init [-1.2 1.2] :ylim-init [-1.2 1.2]
 		      :annotate-stability False))
+
+;; block diagrams
+(defn -block-diagram [S G h t [bind {}] [sym s] [arrowhead "normal"]]
+  (cond
+   ;; basic system
+   (= (get S 0) 'system)
+   (cond
+    ;; rational system
+    (= (get (get S 1) 0) 'rat)
+    (let [params (get S 1)
+		 k (get params 1)
+		 zs (get params 2)
+		 ps (get params 3)
+		 tf (transfer-function S bind sym)
+		 sysnode (pydot.Node (str (hy.gensym))
+				     :shape "box" :label (repr (tf.to-expr)))]
+      (G.add-node sysnode)
+      (G.add-edge (pydot.Edge (h.get-name) (sysnode.get-name)))
+      (G.add-edge (pydot.Edge (sysnode.get-name) (t.get-name) :arrowhead arrowhead))
+      (return ))
+
+    (= (get (get S 1) 0) 'rat-poly)
+    (let [num (get (get S 1) 1)
+	      den (get (get S 1) 2)
+	      tf (transfer-function S bind sym)
+	      sysnode (pydot.Node (str (hy.gensym))
+				  :shape "box" :label (repr (tf.to-expr)))]
+      (G.add-node sysnode)
+      (G.add-edge (pydot.Edge (h.get-name) (sysnode.get-name)))
+      (G.add-edge (pydot.Edge (sysnode.get-name) (t.get-name) :arrowhead arrowhead)))
+
+    (= (get (get S 1) 0) 'gn)
+    (let [gn (get (get S 1) 1)
+	     sysnode (pydot.Node (str (hy.gensym))
+				 :shape "triangle" :orientation 270
+				 :height 0.7 :fixedsize True
+				 :label (repr gn))]
+      (G.add-node sysnode)
+      (G.add-edge (pydot.Edge (h.get-name) (sysnode.get-name)))
+      (G.add-edge (pydot.Edge (sysnode.get-name) (t.get-name) :arrowhead arrowhead)))
+
+    (= (get (get S 1) 0) 'drv)
+    (let [sysnode (pydot.Node (str (hy.gensym))
+			      :shape "box" :label "d/dt")]
+      (G.add-node sysnode)
+      (G.add-edge (pydot.Edge (h.get-name) (sysnode.get-name)))
+      (G.add-edge (pydot.Edge (sysnode.get-name) (t.get-name) :arrowhead arrowhead)))
+
+    (= (get (get S 1) 0) 'int)
+    (let [sysnode (pydot.Node (str (hy.gensym))
+			      :shape "box" :label "Int.")]
+      (G.add-node sysnode)
+      (G.add-edge (pydot.Edge (h.get-name) (sysnode.get-name)))
+      (G.add-edge (pydot.Edge (sysnode.get-name) (t.get-name) :arrowhead arrowhead)))
+
+    ;; delay (DT)
+    (= (get (get S 1) 0) 'dl)
+    (let [dt (get (get S 1) 1)
+	     sysnode (pydot.Node (str (hy.gensym))
+				 :shape "box" :label f"Delay({(repr dt)})")]
+      (G.add-node sysnode)
+      (G.add-edge (pydot.Edge (h.get-name) (sysnode.get-name)))
+      (G.add-edge (pydot.Edge (sysnode.get-name) (t.get-name) :arrowhead arrowhead)))
+
+    ;; accum (DT)
+    (= (get (get S 1) 0) 'acc)
+    (let [sysnode (pydot.Node (str (hy.gensym))
+			      :shape "box" :label "Accum.")]
+      (G.add-node sysnode)
+      (G.add-edge (pydot.Edge (h.get-name) (sysnode.get-name)))
+      (G.add-edge (pydot.Edge (sysnode.get-name) (t.get-name) :arrowhead arrowhead)))
+
+    ;; PD
+    (= (get (get S 1) 0) 'pd)
+    (let [Kp (get (get S 1) 1)
+	     Kd (get (get S 1) 2)
+	     sysnode (pydot.Node (str (hy.gensym))
+				 :shape "box" :label f"PD({(repr Kp)},{(repr Kd)})")]
+      (G.add-node sysnode)
+      (G.add-edge (pydot.Edge (h.get-name) (sysnode.get-name)))
+      (G.add-edge (pydot.Edge (sysnode.get-name) (t.get-name) :arrowhead arrowhead)))
+
+    ;; PID
+    (= (get (get S 1) 0) 'pid)
+    (let [Kp (get (get S 1) 1)
+	     Ki (get (get S 1) 2)
+	     Kd (get (get S 1) 3)
+	     sysnode (pydot.Node (str (hy.gensym))
+				 :shape "box" :label f"PID({(repr Kp)},{(repr Ki)},{(repr Kd)})")]
+      (G.add-node sysnode)
+      (G.add-edge (pydot.Edge (h.get-name) (sysnode.get-name)))
+      (G.add-edge (pydot.Edge (sysnode.get-name) (t.get-name) :arrowhead arrowhead)))
+
+    True
+    (raise ValueError))
+
+   ;; feedback system
+   (= (get S 0) 'feedback)
+   (let [Hf (get S 1)
+	    Hb (get S 2)]
+
+     (setv splitnode (pydot.Node (str (hy.gensym)) :shape "point"))
+     (setv sumnode (pydot.Node (str (hy.gensym))
+			       :label "+" :shape "circle" :width 0.25 :fixedsize True))
+     (G.add-node splitnode)
+     (G.add-node sumnode)
+
+     (-block-diagram Hf G sumnode splitnode bind sym :arrowhead "none")
+     (-block-diagram Hb G splitnode sumnode bind sym :arrowhead "normal")
+
+     (G.add-edge (pydot.Edge (h.get-name) (sumnode.get-name) :arrowhead "normal"))
+     (G.add-edge (pydot.Edge (splitnode.get-name) (t.get-name) :arrowhead arrowhead)))
+
+   ;; composed systems
+   (= (get S 0) 'compose)
+   (let [blocks (cut S 1 None)]
+     (cond
+      (= blocks [])
+      (G.add-edge (pydot.Edge (h.get-name) (t.get-name) :arrowhead arrowhead))
+
+      True
+      (do
+	  (setv h1 (pydot.Node (str (hy.gensym)) :shape "point"))
+	  (G.add-node h1)
+	  (-block-diagram (get blocks 0) G h h1 bind sym :arrowhead "none")
+	(-block-diagram (+ ['compose] (cut blocks 1 None)) G h1 t bind sym :arrowhead arrowhead))))
+
+   ;; both parallel and generic summation
+   (= (get S 0) 'sum)
+   (let [blocks (cut S 1 None)]
+     (setv splitnode (pydot.Node (str (hy.gensym)) :shape "point"))
+     (setv sumnode (pydot.Node (str (hy.gensym))
+			       :label "+" :shape "circle" :width 0.25 :fixedsize True))
+     (G.add-node splitnode)
+     (G.add-node sumnode)
+     (G.add-edge (pydot.Edge (h.get-name) (splitnode.get-name) :arrowhead "none"))
+     (G.add-edge (pydot.Edge (sumnode.get-name) (t.get-name) :arrowhead "normal"))
+     (for [B blocks] (-block-diagram B G splitnode sumnode bind sym :arrowhead "normal")))))
+
+(defn block-diagram [S [bind {}] [sym s] * [output None]]
+  (when (is output None)
+    (print "Pass a PDF filename to block-diagram as :output")
+    (return None))
+  ;; initial graph creation : give it a head and a tail
+  (setv G (pydot.Dot (str (hy.gensym)) :graph-type "digraph"
+		     :rankdir "LR" :splines "ortho"))
+  (if (= sym z)
+      (do
+	  (setv h (pydot.Node "h" :label "x[n]" :shape "plain"))
+	  (setv t (pydot.Node "t" :label "y[n]" :shape "plain")))
+    (do
+	(setv h (pydot.Node "h" :label "x(t)" :shape "plain"))
+	(setv t (pydot.Node "t" :label "y(t)" :shape "plain"))))
+
+  (G.add-node h)
+  (G.add-node t)
+  (-block-diagram S G h t bind sym)
+  (G.write-pdf output))

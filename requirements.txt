@@ -2,6 +2,7 @@ contourpy==1.1.0
 cycler==0.11.0
 decorator==5.1.1
 defusedxml==0.7.1
+dot2tex==2.11.3
 fonttools==4.42.1
 funcparserlib==1.0.1
 hy==0.27.0
@@ -14,6 +15,7 @@ numpy==1.26.1
 olefile==0.46
 packaging==23.1
 pillow==10.2.0
+pydot==1.4.2
 pyparsing==3.0.9
 python-dateutil==2.8.2
 scipy==1.11.3
