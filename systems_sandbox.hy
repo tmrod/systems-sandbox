@@ -206,15 +206,16 @@
 
 ;; num-funs is a list of functions
 ;; plot-funs is a corresponding list of plotting functions
-(defn -plot-with-sliders [num-funs expr [sym s]
+(defn -plot-with-sliders [num-funs tf [sym s]
 				   [lbnd 0] [ubnd None]
 				   [xlim-init [0 10]] [ylim-init [0 1]]
 				   * [plot-funs [(fn [ax x y] (ax.plot x y))]]
-				   [ax-setup-fun (fn [ax] None)]]
+				   [ax-setup-fun (fn [ax] None)]
+				   [annotate-stability True]]
   (assert (= (len num-funs) (len plot-funs)) "num-funs and plot-funs should be the same length")
   (let [fig (plt.figure)
 	    ax (fig.add-subplot 1 1 1)
-	    freesyms (expr.free-symbols.difference [sym])
+	    freesyms (tf.free-symbols.difference [sym])
 	    slider-labels (list (map str freesyms))]
     ;; set up figure and slider hardware
     (ax-setup-fun ax)
@@ -230,15 +231,32 @@
 						   (np.linspace (unpack-iterable xlim-init) 3)
 						   (np.linspace (unpack-iterable ylim-init) 3))))
 
+    (setv stable-annotate (ax.annotate "" #(0.5 1) :xycoords "axes fraction"
+				       :fontsize "x-large"
+				       :horizontalalignment "center"
+				       :verticalalignment "top"))
+
     (defn update-fun [[v None]]
       (let [[xmin xmax] (ax.get-xlim)
 	    var-start-end #(sym (np.clip xmin lbnd ubnd) (np.clip xmax lbnd ubnd))
 	    sub-dict (dfor x (zip freesyms sliders) (get x 0) (. (get x 1) val))
-	    xyss (lfor num-fun num-funs (num-fun (expr.subs sub-dict) var-start-end))]
+	    xyss (lfor num-fun num-funs (num-fun (tf.subs sub-dict) var-start-end))]
 
 	(for [[line xys] (zip lines xyss)]
 	     (. (get line 0) (set-xdata (get xys 0)))
 	     (. (get line 0) (set-ydata (get xys 1))))
+
+	(when annotate-stability
+	  (if (and
+	       (!= sym z)
+	       (= (. tf (subs sub-dict) (is-stable)) True)
+	       (= (. tf (subs sub-dict) is-strictly-proper) True))
+	      (do
+		  (stable-annotate.set-text "")
+		  (stable-annotate.set-color "green"))
+	    (do
+		(stable-annotate.set-text "possibly unstable")
+		(stable-annotate.set-color "red"))))
 
 	(ax.relim)
 	(ax.autoscale-view)
@@ -267,10 +285,10 @@
 
    True
    (-plot-with-sliders
-    [(fn [expr var-start-end] (numdatafun expr
-					  :lower-limit (get var-start-end 1)
-					  :upper-limit (get var-start-end 2)))]
-    (transfer-function S :bind {} :sym s) s
+    [(fn [tf var-start-end] (numdatafun tf
+					:lower-limit (get var-start-end 1)
+					:upper-limit (get var-start-end 2)))]
+    (transfer-function S :bind bind :sym sym) s
     :lbnd 0 :ubnd 50
     :ax-setup-fun ax-setup-fun)))
 
@@ -300,35 +318,35 @@
     (ax.set-ylabel "$|F|$")
     (ax.set-title f"Frequency response of ${(sympy.printing.latex (transfer-function S bind sym))}$" :pad 20))
 
-  (let [tf-expr (. (transfer-function S :bind bind :sym sym) (to-expr))]
+  (let [tf (transfer-function S :bind bind :sym sym)]
     (cond
      (= sym z)
      (-plot-with-sliders
-      [(fn [expr var-start-end] (. (LineOver1DRangeSeries
-				    (sympy.Abs (expr.subs {sym (sympy.exp (+ sigma0 (* 1j omega)))}))
-				    #(omega (get var-start-end 1) (get var-start-end 2)))
-				   (get-points)))]
-      tf-expr sym
+      [(fn [tf0 var-start-end] (. (LineOver1DRangeSeries
+				   (sympy.Abs (. tf0 (to-expr) (subs {sym (sympy.exp (+ sigma0 (* 1j omega)))})))
+				   #(omega (get var-start-end 1) (get var-start-end 2)))
+				  (get-points)))]
+      tf sym
       :lbnd (* -6 np.pi) :ubnd (* 6 np.pi)
       :xlim-init [(- np.pi) (np.pi)] :ylim-init [0 1]
       :ax-setup-fun ax-setup-fun)
 
      True
      (-plot-with-sliders
-      [(fn [expr var-start-end] (. (LineOver1DRangeSeries
-				    (sympy.Abs (expr.subs {sym (+ sigma0 (* 1j omega))}))
-				    #(omega (get var-start-end 1) (get var-start-end 2)))
-				   (get-points)))]
-      tf-expr sym
+      [(fn [tf var-start-end] (. (LineOver1DRangeSeries
+				  (sympy.Abs (. tf (to-expr) (subs {sym (+ sigma0 (* 1j omega))})))
+				  #(omega (get var-start-end 1) (get var-start-end 2)))
+				 (get-points)))]
+      tf sym
       :lbnd -50 :ubnd 50
       :xlim-init [-10 10] :ylim-init [0 1]
       :ax-setup-fun ax-setup-fun))))
 
 (defn pole-zero-plot [S [bind {}] [sym s]]
-  (defn poles-num-fun [expr var-start-end]
-    (let [[zdata pdata] (control-plots.pole-zero-numerical-data expr)] (return [(np.real pdata) (np.imag pdata)])))
-  (defn zeros-num-fun [expr var-start-end]
-    (let [[zdata pdata] (control-plots.pole-zero-numerical-data expr)]
+  (defn poles-num-fun [tf var-start-end]
+    (let [[zdata pdata] (control-plots.pole-zero-numerical-data tf)] (return [(np.real pdata) (np.imag pdata)])))
+  (defn zeros-num-fun [tf var-start-end]
+    (let [[zdata pdata] (control-plots.pole-zero-numerical-data tf)]
       (return [(np.real zdata) (np.imag zdata)])))
   (defn poles-plot-fun [ax xs ys]
     (ax.plot xs ys "x" :markersize 9 :alpha 0.8))
@@ -353,4 +371,5 @@
 		      :plot-funs plot-funs
 		      :ax-setup-fun ax-setup-fun
 		      :lbnd (- np.inf) :ubnd None
-		      :xlim-init [-1.2 1.2] :ylim-init [-1.2 1.2]))
+		      :xlim-init [-1.2 1.2] :ylim-init [-1.2 1.2]
+		      :annotate-stability False))
